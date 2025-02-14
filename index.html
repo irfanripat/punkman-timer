@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Punkman Timer</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            background: url('bg.jpg') no-repeat center center fixed;
+            background-size: cover;
+            background-color: rgba(0, 0, 0, 0.8); /* Darker transparent overlay */
+            color: #333;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        body.dark-mode {
+            background-color: rgba(51, 51, 51, 0.9); /* Slightly darker transparent overlay for dark mode */
+            color: #f4f4f9;
+        }
+        h1 {
+            margin-top: 50px;
+            font-size: 2.5em;
+            color: #4a90e2;
+        }
+        .session {
+            background: rgba(255, 255, 255, 0.9); /* Slightly transparent background */
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin: 20px auto;
+            padding: 20px;
+            max-width: 400px;
+            transition: all 0.3s;
+        }
+        body.dark-mode .session {
+            background: rgba(68, 68, 68, 0.9); /* Slightly transparent background for dark mode */
+        }
+        .session.maximized {
+            max-width: 90%;
+            height: 90vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .session.maximized .timer {
+            font-size: 10em;
+        }
+        .timer {
+            font-size: 3em;
+            margin: 20px 0;
+            color: #4a90e2;
+        }
+        .buttons {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 15px;
+            font-size: 1.2em;
+            margin: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        button:hover {
+            background: #4a90e2;
+            color: #fff;
+        }
+        button:focus {
+            outline: none;
+        }
+        .dark-mode-toggle {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            font-size: 1.5em;
+            cursor: pointer;
+        }
+        .fullscreen-toggle {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            font-size: 1.5em;
+            cursor: pointer;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+</head>
+<body>
+    <h1>Punkman Timer</h1>
+
+    <i class="fas fa-moon dark-mode-toggle" onclick="toggleDarkMode()"></i>
+    <i class="fas fa-expand fullscreen-toggle" onclick="toggleFullScreen()"></i>
+
+    <div class="session" id="opening-session">
+        <h2>Opening Speech</h2>
+        <div class="timer" id="opening-timer">00:00</div>
+        <div class="buttons">
+            <button id="opening-play-pause" onclick="togglePlayPause('opening')"><i class="fas fa-play"></i></button>
+            <button onclick="resetTimer('opening')"><i class="fas fa-redo"></i></button>
+            <button onclick="toggleMaximize('opening')"><i class="fas fa-expand"></i></button>
+        </div>
+    </div>
+
+    <div class="session" id="rebuttal-session">
+        <h2>Rebuttal</h2>
+        <div class="timer" id="rebuttal-timer">00:00</div>
+        <div class="buttons">
+            <button id="rebuttal-play-pause" onclick="togglePlayPause('rebuttal')"><i class="fas fa-play"></i></button>
+            <button onclick="resetTimer('rebuttal')"><i class="fas fa-redo"></i></button>
+            <button onclick="toggleMaximize('rebuttal')"><i class="fas fa-expand"></i></button>
+        </div>
+        <h3>Interruption Timer</h3>
+        <div class="timer" id="interruption-timer" style="font-size: 2em;">00:20</div>
+        <div class="buttons">
+            <button id="interruption-play-pause" onclick="togglePlayPause('interruption')"><i class="fas fa-play"></i></button>
+            <button onclick="resetTimer('interruption')"><i class="fas fa-redo"></i></button>
+        </div>
+    </div>
+
+    <div class="session" id="closing-session">
+        <h2>Closing Speech</h2>
+        <div class="timer" id="closing-timer">00:00</div>
+        <div class="buttons">
+            <button id="closing-play-pause" onclick="togglePlayPause('closing')"><i class="fas fa-play"></i></button>
+            <button onclick="resetTimer('closing')"><i class="fas fa-redo"></i></button>
+            <button onclick="toggleMaximize('closing')"><i class="fas fa-expand"></i></button>
+        </div>
+    </div>
+
+    <audio id="bell-sound" src="bell.mp3" preload="auto"></audio>
+
+    <script>
+        const OPENING_DURATION = 4 * 60 * 1000; // 4 minutes in milliseconds
+        const REBUTTAL_DURATION = 4 * 60 * 1000; // 4 minutes in milliseconds
+        const CLOSING_DURATION = 4 * 60 * 1000; // 4 minutes in milliseconds
+        const INTERRUPTION_DURATION = 20 * 1000; // 20 seconds in milliseconds
+
+        let timers = {
+            opening: null,
+            rebuttal: null,
+            closing: null,
+            interruption: null
+        };
+
+        let times = {
+            opening: OPENING_DURATION,
+            rebuttal: REBUTTAL_DURATION,
+            closing: CLOSING_DURATION,
+            interruption: INTERRUPTION_DURATION
+        };
+
+        let currentSlide = 0;
+
+        function togglePlayPause(session) {
+            const button = document.getElementById(`${session}-play-pause`);
+            const icon = button.querySelector('i');
+            if (timers[session]) {
+                stopTimer(session);
+                icon.classList.remove('fa-pause');
+                icon.classList.add('fa-play');
+            } else {
+                startTimer(session);
+                icon.classList.remove('fa-play');
+                icon.classList.add('fa-pause');
+            }
+        }
+
+        function startTimer(session) {
+            if (timers[session]) return;
+            timers[session] = setInterval(() => {
+                if (times[session] <= 0) {
+                    stopTimer(session);
+                    document.getElementById(`${session}-timer`).innerText = '00:00';
+                    const button = document.getElementById(`${session}-play-pause`);
+                    const icon = button.querySelector('i');
+                    icon.classList.remove('fa-pause');
+                    icon.classList.add('fa-play');
+                    document.getElementById('bell-sound').play();
+                    return;
+                }
+                times[session] -= 10;
+                document.getElementById(`${session}-timer`).innerText = formatTime(times[session]);
+            }, 10);
+        }
+
+        function stopTimer(session) {
+            clearInterval(timers[session]);
+            timers[session] = null;
+        }
+
+        function resetTimer(session) {
+            stopTimer(session);
+            times[session] = session === 'opening' ? OPENING_DURATION : session === 'rebuttal' ? REBUTTAL_DURATION : session === 'closing' ? CLOSING_DURATION : INTERRUPTION_DURATION;
+            document.getElementById(`${session}-timer`).innerText = formatTime(times[session]);
+            const button = document.getElementById(`${session}-play-pause`);
+            const icon = button.querySelector('i');
+            icon.classList.remove('fa-pause');
+            icon.classList.add('fa-play');
+        }
+
+        function formatTime(milliseconds) {
+            const mins = Math.floor(milliseconds / 60000);
+            const secs = Math.floor((milliseconds % 60000) / 1000);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function toggleMaximize(session) {
+            const sessionElement = document.getElementById(`${session}-session`);
+            sessionElement.classList.toggle('maximized');
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            const icon = document.querySelector('.dark-mode-toggle');
+            icon.classList.toggle('fa-moon');
+            icon.classList.toggle('fa-sun');
+        }
+
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        // Initialize timers to default seconds
+        document.getElementById('opening-timer').innerText = formatTime(times.opening);
+        document.getElementById('rebuttal-timer').innerText = formatTime(times.rebuttal);
+        document.getElementById('closing-timer').innerText = formatTime(times.closing);
+        document.getElementById('interruption-timer').innerText = formatTime(times.interruption);
+    </script>
+</body>
+</html>

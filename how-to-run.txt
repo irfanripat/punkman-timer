@@ -1,0 +1,7 @@
+1. Baca Bismillah
+2. Klik si index.html
+3. Udeeh
+
+---
+
+Kalo mo ganti audio same background, replace aja ntu file2 nya, namanya samain.
